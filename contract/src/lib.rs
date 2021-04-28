@@ -4,6 +4,7 @@ use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::wee_alloc;
 use near_sdk::json_types::U128;
 use near_sdk::{env, near_bindgen, AccountId, Balance, Promise, Gas, ext_contract, PromiseResult, PromiseOrValue};
+use std::collections::HashMap;
 
 #[ext_contract(auth)]
 pub trait ExtAuth {
@@ -12,8 +13,18 @@ pub trait ExtAuth {
 
 #[ext_contract(ext_self)]
 pub trait ExtNearDrops {
-    fn on_is_owner_on_claim(&mut self, #[callback] contacts: Option<Vec<Contact>>, drop_id: DropId, recipient_account_id: AccountId, recipient_contact: Contact, balance_to_claim: Balance) -> PromiseOrValue<bool>;
-    fn on_claim_complete(&mut self, drop_id: DropId, account_id: AccountId, contact: Contact, balance_to_claim: Balance) -> bool;
+    fn on_is_owner_on_claim(&mut self,
+                            #[callback] contacts: Option<Vec<Contact>>,
+                            drop_id: DropId,
+                            recipient_account_id: AccountId,
+                            recipient_contact: Contact,
+                            balance_to_claim: Balance) -> PromiseOrValue<bool>;
+
+    fn on_claim_complete(&mut self,
+                         drop_id: DropId,
+                         account_id: AccountId,
+                         contact: Contact,
+                         balance_to_claim: Balance) -> bool;
 }
 
 
@@ -55,7 +66,7 @@ pub struct Contact {
 #[derive(Clone, BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Payout {
-    pub amount: Balance,
+    pub amount: WrappedBalance,
     pub contact: Contact,
     pub claimed: bool,
 }
@@ -92,7 +103,6 @@ impl Default for NearDrop {
         }
     }
 }
-
 
 pub fn assert_self() {
     assert_eq!(
@@ -162,16 +172,17 @@ impl NearDrop {
             Promise::new(owner_id.clone()).transfer(tokens_to_return);
         }
 
-        let payouts_prepared = payouts
-            .into_iter()
-            .map(|payout| {
-                Payout {
-                    contact: payout.contact,
-                    amount: payout.amount.0,
-                    claimed: false,
-                }
-            })
-            .collect();
+        let payouts_prepared =
+            payouts
+                .into_iter()
+                .map(|payout| {
+                    Payout {
+                        contact: payout.contact,
+                        amount: payout.amount,
+                        claimed: false,
+                    }
+                })
+                .collect();
 
         let d = Drop {
             owner_account_id: owner_id,
@@ -210,11 +221,8 @@ impl NearDrop {
         let balance_to_claim: Balance = NearDrop::get_claim_amount(self, drop_id.clone(), contact.clone()).0;
 
         if balance_to_claim > 0 {
-            env::log(format!("Claimed {} by @{} [{:?} account {:?}] drop #{}",
+            env::log(format!("Claiming {} by @{} [{:?} account {:?}] drop #{}",
                              balance_to_claim, account_id, contact.contact_type, contact.value, drop_id).as_bytes());
-
-            //fn on_get_contacts_on_claim(&mut self, #[callback] accounts: Option<Vec<AccountId>>,
-            // drop_id: DropId, recipient_account_id: AccountId, recipient_contact: Contact, balance_to_claim: Balance) -> bool;
 
             PromiseOrValue::Promise(auth::is_owner(account_id.clone(), contact.clone(), &self.near_auth_contract, NO_DEPOSIT, BASE_GAS)
                 .then(ext_self::on_is_owner_on_claim(
@@ -277,7 +285,7 @@ impl NearDrop {
                         drop.payouts
                             .into_iter()
                             .map(|payout| {
-                                if payout.contact == contact && payout.amount == balance_to_claim {
+                                if payout.contact == contact && payout.amount.0 == balance_to_claim {
                                     payout_found = true;
                                     Payout {
                                         contact: payout.contact,
@@ -289,8 +297,6 @@ impl NearDrop {
                                 }
                             })
                             .collect();
-
-                    env::log(format!("on_claim_complete payout_found {}", payout_found).as_bytes());
 
                     if payout_found {
                         env::log(format!("@{} claimed {} [{:?} account {:?}] for drop #{}",
@@ -318,11 +324,24 @@ impl NearDrop {
         }
     }
 
-    pub fn get_drops(&self, id: u64) -> Option<Drop> {
+    pub fn get_drop(&self, id: u64) -> Option<Drop> {
         match self.drops.get(&id) {
             Some(drop) => Some(drop),
             None => None,
         }
+    }
+
+    pub fn get_drops(&self, from_index: u64, limit: u64) -> HashMap<u64, Drop> {
+        (from_index..std::cmp::min(from_index + limit, self.drops.len()))
+            .map(|index| (index, self.drops.get(&index).unwrap()))
+            .collect()
+    }
+
+    pub fn get_drops_by_account_id(&self, account_id: AccountId, from_index: u64, limit: u64) -> HashMap<u64, Drop> {
+        (from_index..std::cmp::min(from_index + limit, self.drops.len()))
+            .filter(|index| self.drops.get(&index).unwrap().owner_account_id == account_id)
+            .map(|index| (index, self.drops.get(&index).unwrap()))
+            .collect()
     }
 }
 

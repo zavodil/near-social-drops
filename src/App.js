@@ -1,197 +1,509 @@
 import 'regenerator-runtime/runtime'
 import React from 'react'
-import { login, logout } from './utils'
+import {login, logout} from './utils'
+import * as nearAPI from 'near-api-js'
+
+const queryString = require('query-string');
+import Dropdown from 'react-dropdown';
+import 'react-dropdown/style.css';
 import './global.css'
+import './app.css'
+import {useDetectOutsideClick} from "./includes/useDetectOutsideClick";
+import {Header, Footer, Notification} from "./includes/pageParts";
+import * as nearFunctions from "/includes/nearFunctions";
 
 import getConfig from './config'
-const { networkId } = getConfig(process.env.NODE_ENV || 'development')
+import getAppSettings from './app-settings'
+
+const appSettings = getAppSettings();
+const config = getConfig(process.env.NODE_ENV || 'development');
+const FRAC_DIGITS = 5;
 
 export default function App() {
-  // use React Hooks to store greeting in component state
-  const [greeting, set_greeting] = React.useState()
+    const [buttonDisabled, setButtonDisabled] = React.useState(false)
+    const [showNotification, setShowNotification] = React.useState(false)
+    const navDropdownRef = React.useRef(null);
+    const [isNavDropdownActive, setIsNaVDropdownActive] = useDetectOutsideClick(navDropdownRef, false);
 
-  // when the user has not yet interacted with the form, disable the button
-  const [buttonDisabled, setButtonDisabled] = React.useState(true)
+    /* APP STATE */
+    const [input, setInput] = React.useState("");
+    const [myDrops, setMyDrops] = React.useState("");
+    const [deposit, setDeposit] = React.useState(0);
+    const [contactType, setContactType] = React.useState("Github");
+    const [contactValue, setContactValue] = React.useState("");
+    const [contactAmount, setContactAmount] = React.useState("");
+    const [payouts, setPayouts] = React.useState([]);
+    const [dropTitle, setDropTitle] = React.useState("");
+    const [githubRepo, setGithubRepo] = React.useState("");
+    const [githubRepoAmount, setGithubRepoAmount] = React.useState(0);
+    const [selectedDrop, setSelectedDrop] = React.useState(-1);
 
-  // after submitting the form, we want to show Notification
-  const [showNotification, setShowNotification] = React.useState(false)
+    const [txProcessing, setTxProcessing] = React.useState(false);
 
-  // The useEffect hook can be used to fire side-effects during render
-  // Learn more: https://reactjs.org/docs/hooks-intro.html
-  React.useEffect(
-    () => {
-      // in this case, we only care to query the contract when signed in
-      if (window.walletConnection.isSignedIn()) {
+    const [userContacts, setUserContacts] = React.useState([]);
 
-        // window.contract is set by initContract in index.js
-        window.contract.get_greeting({ account_id: window.accountId })
-          .then(greetingFromContract => {
-            set_greeting(greetingFromContract)
-          })
-      }
-    },
+    /* APP */
+    const inputChange = (value) => {
+        setInput(value);
+        setButtonDisabled(!parseFloat(value) || parseFloat(value) < 0);
+    };
 
-    // The second argument to useEffect tells React when to re-run the effect
-    // Use an empty array to specify "only run on first render"
-    // This works because signing into NEAR Wallet reloads the page
-    []
-  )
+    const dropdownOptions = ["Github", "Telegram", "Email"];
 
-  // if not signed in, return early with sign-in prompt
-  if (!window.walletConnection.isSignedIn()) {
-    return (
-      <main>
-        <h1>Welcome to NEAR!</h1>
-        <p>
-          To make use of the NEAR blockchain, you need to sign in. The button
-          below will sign you in using NEAR Wallet.
-        </p>
-        <p>
-          By default, when your app runs in "development" mode, it connects
-          to a test network ("testnet") wallet. This works just like the main
-          network ("mainnet") wallet, but the NEAR Tokens on testnet aren't
-          convertible to other currencies – they're just for testing!
-        </p>
-        <p>
-          Go ahead and click the button below to try it out:
-        </p>
-        <p style={{ textAlign: 'center', marginTop: '2.5em' }}>
-          <button onClick={login}>Sign in</button>
-        </p>
-      </main>
-    )
-  }
+    /* ON LOAD EVENT */
+    const OnSignIn = async () => {
+        try {
+            const drops = await LoadMyDrops();
+            await LoadContacts();
 
-  return (
-    // use React Fragment, <>, to avoid wrapping elements in unnecessary divs
-    <>
-      <button className="link" style={{ float: 'right' }} onClick={logout}>
-        Sign out
-      </button>
-      <main>
-        <h1>
-          <label
-            htmlFor="greeting"
-            style={{
-              color: 'var(--secondary)',
-              borderBottom: '2px solid var(--secondary)'
-            }}
-          >
-            {greeting}
-          </label>
-          {' '/* React trims whitespace around tags; insert literal space character when needed */}
-          {window.accountId}!
-        </h1>
-        <form onSubmit={async event => {
-          event.preventDefault()
+            return drops;
+        } catch (e) {
+            Notify({method: "fail", data: e.message});
+        }
+    };
 
-          // get elements from the form using their id attribute
-          const { fieldset, greeting } = event.target.elements
+    const LoadMyDrops = async () => {
+        const drops = await window.contract.get_drops_by_account_id({
+            account_id: window.accountId,
+            from_index: 0,
+            limit: 100
+        });
+        setMyDrops(drops);
+        return drops;
+    };
 
-          // hold onto new user-entered value from React's SynthenticEvent for use after `await` call
-          const newGreeting = greeting.value
+    const LoadContacts = async () => {
+        const contacts = await window.authContract.get_contacts({
+            account_id: window.accountId
+        });
+        setUserContacts(contacts);
 
-          // disable the form while the value gets updated on-chain
-          fieldset.disabled = true
+    };
 
-          try {
-            // make an update call to the smart contract
-            await window.contract.set_greeting({
-              // pass the value that the user entered in the greeting field
-              message: newGreeting
-            })
-          } catch (e) {
-            alert(
-              'Something went wrong! ' +
-              'Maybe you need to sign out and back in? ' +
-              'Check your browser console for more info.'
-            )
-            throw e
-          } finally {
-            // re-enable the form, whether the call succeeded or failed
-            fieldset.disabled = false
-          }
+    /* UI EVENTS */
+    const NavMenuOnClick = () => setIsNaVDropdownActive(!isNavDropdownActive);
 
-          // update local `greeting` variable to match persisted value
-          set_greeting(newGreeting)
-
-          // show Notification
-          setShowNotification(true)
-
-          // remove Notification again after css animation completes
-          // this allows it to be shown again next time the form is submitted
-          setTimeout(() => {
+    const Notify = (params) => {
+        setShowNotification(params);
+        setTimeout(() => {
             setShowNotification(false)
-          }, 11000)
-        }}>
-          <fieldset id="fieldset">
-            <label
-              htmlFor="greeting"
-              style={{
-                display: 'block',
-                color: 'var(--gray)',
-                marginBottom: '0.5em'
-              }}
-            >
-              Change greeting
-            </label>
-            <div style={{ display: 'flex' }}>
-              <input
-                autoComplete="off"
-                defaultValue={greeting}
-                id="greeting"
-                onChange={e => setButtonDisabled(e.target.value === greeting)}
-                style={{ flex: 1 }}
-              />
-              <button
-                disabled={buttonDisabled}
-                style={{ borderRadius: '0 5px 5px 0' }}
-              >
-                Save
-              </button>
-            </div>
-          </fieldset>
-        </form>
-        <p>
-          Look at that! A Hello World app! This greeting is stored on the NEAR blockchain. Check it out:
-        </p>
-        <ol>
-          <li>
-            Look in <code>src/App.js</code> and <code>src/utils.js</code> – you'll see <code>get_greeting</code> and <code>set_greeting</code> being called on <code>contract</code>. What's this?
-          </li>
-          <li>
-            Ultimately, this <code>contract</code> code is defined in <code>assembly/main.ts</code> – this is the source code for your <a target="_blank" rel="noreferrer" href="https://docs.near.org/docs/roles/developer/contracts/intro">smart contract</a>.</li>
-          <li>
-            When you run <code>yarn dev</code>, the code in <code>assembly/main.ts</code> gets deployed to the NEAR testnet. You can see how this happens by looking in <code>package.json</code> at the <code>scripts</code> section to find the <code>dev</code> command.</li>
-        </ol>
-        <hr />
-        <p>
-          To keep learning, check out <a target="_blank" rel="noreferrer" href="https://docs.near.org">the NEAR docs</a> or look through some <a target="_blank" rel="noreferrer" href="https://examples.near.org">example apps</a>.
-        </p>
-      </main>
-      {showNotification && <Notification />}
-    </>
-  )
-}
+        }, 11000)
+    };
 
-// this component gets rendered by App after the form is submitted
-function Notification() {
-  const urlPrefix = `https://explorer.${networkId}.near.org/accounts`
-  return (
-    <aside>
-      <a target="_blank" rel="noreferrer" href={`${urlPrefix}/${window.accountId}`}>
-        {window.accountId}
-      </a>
-      {' '/* React trims whitespace around tags; insert literal space character when needed */}
-      called method: 'set_greeting' in contract:
-      {' '}
-      <a target="_blank" rel="noreferrer" href={`${urlPrefix}/${window.contract.contractId}`}>
-        {window.contract.contractId}
-      </a>
-      <footer>
-        <div>✔ Succeeded</div>
-        <div>Just now</div>
-      </footer>
-    </aside>
-  )
+    React.useEffect(
+        async () => {
+            if (window.walletConnection.isSignedIn()) {
+                await OnSignIn();
+
+                if (location.search) {
+                    const query = JSON.parse(JSON.stringify(queryString.parse(location.search)));
+                    if (query && query.hasOwnProperty("drop")) {
+                        setSelectedDrop(query.drop)
+                    }
+                }
+            }
+        },
+        []
+    );
+
+    /* LOGIN SCREEN */
+    if (!window.walletConnection.isSignedIn()) {
+
+        return (
+            <>
+                <Header onClick={NavMenuOnClick}
+                        config={config}
+                        deposit={deposit}
+                        navDropdownRef={navDropdownRef}
+                        isNavDropdownActive={isNavDropdownActive}
+                        appSettings={appSettings}/>
+                <main>
+                    <h1>{appSettings.appFullNme}</h1>
+                    <p>
+                        {appSettings.appDescription}
+                    </p>
+                    <p>
+                        To make use of the NEAR blockchain, you need to sign in. The button
+                        below will sign you in using NEAR Wallet.
+                    </p>
+                    <p style={{textAlign: 'center', marginTop: '2.5em'}}>
+                        <button onClick={login}>Sign in</button>
+                    </p>
+                </main>
+                <Footer appSettings={appSettings}/>
+            </>
+        )
+    }
+
+    const addPayout = (payout) => {
+        setPayouts([...payouts, payout]);
+        setContactValue("");
+    };
+
+    const PayoutsList = () => {
+        return (<ul>
+            {Object.keys(payouts).map((key, index) => {
+                const payout = payouts[index];
+                return <li
+                    key={`payout-${index}`}>{payout.contact.value} / {payout.contact.contact_type}: {payout.amount}Ⓝ</li>
+            })}
+        </ul>);
+    };
+
+    const ClaimDropButton = (props) => {
+        return <button className="claim-drop" disabled={!props.claim_available}
+                       onClick={async event => {
+                           event.preventDefault()
+                           setTxProcessing(true);
+
+                           try {
+                               await window.contract.claim({
+                                   drop_id: Number(props.drop_id),
+                                   contact: {
+                                       contact_type: props.contact_type,
+                                       value: props.value
+                                   }
+                               }, 300000000000000, 0);
+                               Notify({method: "call", data: "claim"});
+                           } catch (e) {
+                               nearFunctions.ContractCallAlert();
+                               Notify({method: "fail", data: e.message});
+                               throw e
+                           } finally {
+                               setTxProcessing(false)
+                               await LoadMyDrops();
+                           }
+
+                       }}>
+            Claim {props.amount} Ⓝ
+        </button>;
+    };
+
+    const SelectedDrop = () => {
+        if (Number(selectedDrop) < 0) {
+            return null;
+        } else {
+            const drop = myDrops[selectedDrop];
+            return <div><h3>My Drops</h3>
+                <div>
+                    Drop #{selectedDrop}: {drop.tite}
+                </div>
+                <ul>
+                    {Object.keys(drop.payouts).map((key, index) => {
+                        const payout = drop.payouts[index];
+                        const amountNear = nearAPI.utils.format.formatNearAmount(payout.amount, FRAC_DIGITS).replace(",", "");
+                        let claim_available = false;
+
+
+                        for (let i = 0; i < userContacts.length; i++) {
+                            const contact = userContacts[i];
+                            if (contact.value === payout.contact.value && contact.contact_type === payout.contact.contact_type) {
+                                claim_available = !txProcessing;
+                                break;
+                            }
+                        }
+
+                        return <li
+                            key={`payout-${index}`}>
+                            {payout.contact.value} / {payout.contact.contact_type}
+                            {!payout.claimed ?
+                                <ClaimDropButton claim_available={claim_available} drop_id={selectedDrop}
+                                                 contact_type={payout.contact.contact_type}
+                                                 value={payout.contact.value}
+                                                 amount={amountNear}/>
+                                : <button className="claim-drop" disabled="true">
+                                    {amountNear} Ⓝ Already claimed
+                                </button>}
+                        </li>
+                    })}
+                </ul>
+            </div>;
+        }
+    };
+
+    const MyDropsList = () => {
+        return (
+            !!Object.keys(myDrops).length &&
+            <div><h3>My Drops</h3>
+                <ul>
+                    {Object.keys(myDrops).map((key) => {
+                        const drop = myDrops[key];
+                        return <li
+                            key={`drop-${key}`}>
+                            <a href={`/?drop=${key}`}>
+                                {drop.title || "[No title]"}
+                            </a>
+                        </li>
+                    })}
+                </ul>
+            </div>);
+    };
+
+    const SubmitPayoutsButton = () => {
+        return (
+            !!Object.keys(payouts).length &&
+            <button
+                disabled={buttonDisabled}
+                onClick={async event => {
+                    event.preventDefault()
+
+                    if (payouts.length) {
+                        try {
+                            let total = 0;
+                            let exportPayouts = [];
+                            {
+                                Object.keys(payouts).map((key, index) => {
+                                    total += parseFloat(payouts[index].amount);
+                                    exportPayouts.push({
+                                        amount: nearFunctions.ConvertToYoctoNear(payouts[index].amount),
+                                        contact: payouts[index].contact
+                                    });
+                                })
+                            }
+
+                            await window.contract.add_drop({
+                                payouts: exportPayouts,
+                                title: dropTitle,
+                                description: "",
+                            }, 300000000000000, nearFunctions.ConvertToYoctoNear(total))
+                        } catch (e) {
+                            nearFunctions.ContractCallAlert();
+                            Notify({method: "fail", data: e.message});
+                            throw e
+                        } finally {
+                            fieldset.disabled = false
+                        }
+
+                        Notify({method: "call", data: "send"});
+                    }
+                }}
+            >
+                Create a drop
+            </button>
+        )
+    }
+
+
+    return (
+        <>
+            <Header onClick={NavMenuOnClick}
+                    config={config}
+                    deposit={deposit}
+                    navDropdownRef={navDropdownRef}
+                    isNavDropdownActive={isNavDropdownActive}
+                    appSettings={appSettings}/>
+            <main>
+                <div className="background-img"/>
+                <h1>
+                    <a href={"/"}>
+                        {appSettings.appFullNme}
+                    </a>
+                </h1>
+
+                <form onSubmit={async event => {
+                    event.preventDefault()
+
+                    const {fieldset} = event.target.elements;
+
+                    if (contactAmount && contactValue && contactType) {
+                        let contact = {
+                            amount: contactAmount,
+                            contact: {
+                                contact_type: contactType,
+                                value: contactValue
+                            }
+                        }
+                        addPayout(contact);
+                    }
+
+                    if (input) {
+                        fieldset.disabled = true
+
+                        try {
+                            await window.contract.send({}, 300000000000000, nearFunctions.ConvertToYoctoNear(1))
+                        } catch (e) {
+                            nearFunctions.ContractCallAlert();
+                            Notify({method: "fail", data: e.message});
+                            throw e
+                        } finally {
+                            fieldset.disabled = false
+                        }
+
+                        Notify({method: "call", data: "send"});
+                    }
+                }}>
+                    <fieldset id="fieldset">
+                        <div style={{display: 'flex'}}>
+                            <div style={{paddingTop: "18px"}}>
+                                <label
+                                    htmlFor="input-drop-title"
+                                    style={{
+                                        display: 'block',
+                                        color: 'var(--gray)',
+                                        marginBottom: '0.5em'
+                                    }}
+                                >
+                                    Create Social Drop
+                                </label>
+                            </div>
+                            <div style={{paddingTop: "10px", paddingBottom: "10px", paddingLeft: "20px"}}>
+                                <input
+                                    key="input-drop-title"
+                                    autoComplete="off"
+                                    value={dropTitle}
+                                    placeholder="Drop Title"
+                                    id="input-drop-title"
+                                    onChange={e => setDropTitle(e.target.value)}
+                                    style={{flex: 1}}
+                                />
+                            </div>
+                        </div>
+                        <div style={{display: 'flex'}}>
+                            <Dropdown
+                                style={{minWidth: "150px"}}
+                                options={dropdownOptions}
+                                onChange={e => setContactType(e.value)}
+                                value={contactType}
+                                placeholder="Type"/>
+
+                            <input
+                                key="input-contact-value"
+                                autoComplete="off"
+                                value={contactValue}
+                                placeholder="Handle"
+                                id="contact-value"
+                                onChange={e => setContactValue(e.target.value)}
+                                style={{flex: 1}}
+                            />
+
+                            <input
+                                key="input-contact-amount"
+                                autoComplete="off"
+                                value={contactAmount}
+                                id="contact-amount"
+                                placeholder="Amount"
+                                onChange={e => setContactAmount(e.target.value)}
+                                style={{flex: 1}}
+                            />
+
+                            <button
+                                disabled={buttonDisabled}
+                                style={{borderRadius: '0 5px 5px 0'}}
+                            >
+                                Add
+                            </button>
+                        </div>
+                    </fieldset>
+                </form>
+
+                <PayoutsList/>
+
+                <SubmitPayoutsButton/>
+
+
+                <form onSubmit={async event => {
+                    event.preventDefault()
+
+                    const {fieldset} = event.target.elements;
+
+                    if (input) {
+                        fieldset.disabled = true
+
+                        try {
+                            await window.contract.send({}, 300000000000000, nearFunctions.ConvertToYoctoNear(1))
+                        } catch (e) {
+                            nearFunctions.ContractCallAlert();
+                            Notify({method: "fail", data: e.message});
+                            throw e
+                        } finally {
+                            fieldset.disabled = false
+                        }
+
+                        Notify({method: "call", data: "send"});
+                    }
+                }}>
+                    <fieldset id="fieldset" style={{paddingTop: "30px"}}>
+                        <label
+                            htmlFor="github-repo"
+                            style={{
+                                display: 'block',
+                                color: 'var(--gray)',
+                                marginBottom: '0.5em'
+                            }}
+                        >
+                            Import Github Contributors:
+                        </label>
+                        <div style={{display: 'flex'}}>
+                            <input
+                                key="input-github-repo"
+                                title="Github Repo"
+                                autoComplete="off"
+                                value={githubRepo}
+                                id="github-repo"
+                                onChange={e => setGithubRepo(e.target.value)}
+                                placeholder="Github Repo"
+                                style={{flex: 1}}
+                            />
+
+                            <input
+                                key="input-github-repo-amount"
+                                autoComplete="off"
+                                value={githubRepoAmount}
+                                id="contact-amount"
+                                placeholder="Amount"
+                                onChange={e => setGithubRepoAmount(e.target.value)}
+                                style={{flex: 1}}
+                            />
+
+                            <button
+                                disabled={buttonDisabled}
+                                style={{borderRadius: '0 5px 5px 0'}}
+                                title={"Import Github Contributors"}
+                                onClick={async event => {
+                                    event.preventDefault()
+
+                                    const url = `https://api.github.com/repos/${githubRepo}/contributors?anon=1`;
+                                    let exportPayouts = [];
+
+                                    fetch(url)
+                                        .then(response => response.json())
+                                        .then(data => {
+                                            if (!data.length)
+                                                alert("Contributors not found");
+                                            data.forEach((item) => {
+                                                if (item.hasOwnProperty("login")) {
+                                                    exportPayouts.push({
+                                                        amount: githubRepoAmount,
+                                                        contact: {
+                                                            contact_type: "Github",
+                                                            value: item["login"]
+                                                        }
+                                                    });
+                                                }
+                                            })
+
+                                            setPayouts(exportPayouts);
+                                        });
+
+                                    if (exportPayouts.length > 0)
+                                        Notify({method: "text", data: `${exportPayouts} github users found`});
+                                }}
+                            >
+                                Import
+                            </button>
+                        </div>
+                    </fieldset>
+                </form>
+
+                <SelectedDrop/>
+
+                <div className={"hints"}>
+                    <MyDropsList/>
+                </div>
+            </main>
+            <Footer appSettings={appSettings}/>
+            {showNotification && Object.keys(showNotification) &&
+            <Notification config={config} method={showNotification.method} data={showNotification.data}/>}
+        </>
+    );
 }

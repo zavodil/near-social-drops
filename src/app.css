@@ -1,0 +1,50 @@
+.hints {
+    font-size: 0.8em;
+    color: var(--gray);
+}
+
+.hints li{
+    padding-bottom: 0.4em;
+}
+
+.actions{
+    padding: 20px 0;
+    border-top: 1px solid var(--gray);
+}
+
+.Dropdown-control{
+    background-color: var(--shadow) !important;
+}
+
+.Dropdown-arrow{
+    margin-top: 8px;
+}
+
+#contact-value, #input-github-repo {
+    max-width: 200px;
+}
+
+#contact-amount, #input-github-repo-amount {
+    max-width: 150px;
+}
+
+li a {
+     color: var(--gray);
+     text-decoration: underline;
+}
+
+h1 a {
+    color: var(--fg);
+    text-decoration: none;
+}
+
+h1 a:hover {
+    color: var(--fg);
+    text-decoration: none;
+}
+
+.claim-drop {
+    margin-left: 10px;
+    padding: 1px 5px;
+    font-size: 0.8em;
+}
