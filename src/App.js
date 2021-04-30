@@ -27,7 +27,7 @@ export default function App() {
 
     /* APP STATE */
     const [input, setInput] = React.useState("");
-    const [myDrops, setMyDrops] = React.useState("");
+    const [allDrops, setAllDrops] = React.useState("");
     const [deposit, setDeposit] = React.useState(0);
     const [contactType, setContactType] = React.useState("Github");
     const [contactValue, setContactValue] = React.useState("");
@@ -53,7 +53,7 @@ export default function App() {
     /* ON LOAD EVENT */
     const OnSignIn = async () => {
         try {
-            const drops = await LoadMyDrops();
+            const drops = await LoadAllDrops();
             await LoadContacts();
 
             return drops;
@@ -62,13 +62,14 @@ export default function App() {
         }
     };
 
-    const LoadMyDrops = async () => {
-        const drops = await window.contract.get_drops_by_account_id({
-            account_id: window.accountId,
+    const LoadAllDrops = async () => {
+        const drops = await window.contract.get_drops({
             from_index: 0,
             limit: 100
         });
-        setMyDrops(drops);
+
+        setAllDrops(drops);
+
         return drops;
     };
 
@@ -171,7 +172,7 @@ export default function App() {
                                throw e
                            } finally {
                                setTxProcessing(false)
-                               await LoadMyDrops();
+                               await LoadAllDrops();
                            }
 
                        }}>
@@ -183,7 +184,7 @@ export default function App() {
         if (Number(selectedDrop) < 0) {
             return null;
         } else {
-            const drop = myDrops[selectedDrop];
+            const drop = allDrops[selectedDrop];
             return <div><h3>My Drops</h3>
                 <div>
                     Drop #{selectedDrop}: {drop.tite}
@@ -211,7 +212,7 @@ export default function App() {
                                                  contact_type={payout.contact.contact_type}
                                                  value={payout.contact.value}
                                                  amount={amountNear}/>
-                                : <button className="claim-drop" disabled="true">
+                                : <button className="claim-drop" disabled={true}>
                                     {amountNear} Ⓝ Already claimed
                                 </button>}
                         </li>
@@ -222,21 +223,26 @@ export default function App() {
     };
 
     const MyDropsList = () => {
-        return (
-            !!Object.keys(myDrops).length &&
-            <div><h3>My Drops</h3>
-                <ul>
-                    {Object.keys(myDrops).map((key) => {
-                        const drop = myDrops[key];
-                        return <li
-                            key={`drop-${key}`}>
-                            <a href={`/?drop=${key}`}>
-                                {drop.title || "[No title]"}
-                            </a>
-                        </li>
-                    })}
-                </ul>
-            </div>);
+        if(Object.keys(allDrops).length) {
+            const myDropsKeys = Object.keys(allDrops).filter(key => allDrops[key].owner_account_id === window.accountId);
+            return (
+                !!Object.keys(myDropsKeys).length &&
+                <div><h3>My Drops</h3>
+                    <ul>
+                        {myDropsKeys.map((key) => {
+                            const drop = allDrops[key];
+                            return <li
+                                key={`drop-${key}`}>
+                                <a href={`/?drop=${key}`}>
+                                    {drop.title || "[No title]"}
+                                </a>
+                            </li>
+                        })}
+                    </ul>
+                </div>);
+        }
+        else
+            return null;
     };
 
     const SubmitPayoutsButton = () => {
