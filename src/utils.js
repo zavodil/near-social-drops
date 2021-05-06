@@ -2,7 +2,7 @@ import { connect, Contract, keyStores, WalletConnection } from 'near-api-js'
 import getConfig from './config'
 
 const nearConfig = getConfig(process.env.NODE_ENV || 'development')
-const authContractName = (process.env === 'mainnet') ? "auth.app.near" : "dev-1614425625888-4173456";
+const authContractName = (process.env === 'mainnet') ? "auth.app.near" : "dev-1620212666105-9443052";
 
 // Initialize contract & set global variables
 export async function initContract() {

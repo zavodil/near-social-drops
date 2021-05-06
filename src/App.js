@@ -77,7 +77,7 @@ export default function App() {
         const contacts = await window.authContract.get_contacts({
             account_id: window.accountId
         });
-        setUserContacts(contacts);
+        setUserContacts(contacts || []);
 
     };
 
@@ -146,7 +146,7 @@ export default function App() {
             {Object.keys(payouts).map((key, index) => {
                 const payout = payouts[index];
                 return <li
-                    key={`payout-${index}`}>{payout.contact.value} / {payout.contact.contact_type}: {payout.amount}Ⓝ</li>
+                    key={`payout-${index}`}>{payout.contact.value} / {payout.contact.category}: {payout.amount}Ⓝ</li>
             })}
         </ul>);
     };
@@ -161,7 +161,7 @@ export default function App() {
                                await window.contract.claim({
                                    drop_id: Number(props.drop_id),
                                    contact: {
-                                       contact_type: props.contact_type,
+                                       category: props.category,
                                        value: props.value
                                    }
                                }, 300000000000000, 0);
@@ -198,7 +198,7 @@ export default function App() {
 
                         for (let i = 0; i < userContacts.length; i++) {
                             const contact = userContacts[i];
-                            if (contact.value === payout.contact.value && contact.contact_type === payout.contact.contact_type) {
+                            if (contact.value === payout.contact.value && contact.category === payout.contact.category) {
                                 claim_available = !txProcessing;
                                 break;
                             }
@@ -206,10 +206,10 @@ export default function App() {
 
                         return <li
                             key={`payout-${index}`}>
-                            {payout.contact.value} / {payout.contact.contact_type}
+                            {payout.contact.value} / {payout.contact.category}
                             {!payout.claimed ?
                                 <ClaimDropButton claim_available={claim_available} drop_id={selectedDrop}
-                                                 contact_type={payout.contact.contact_type}
+                                                 category={payout.contact.category}
                                                  value={payout.contact.value}
                                                  amount={amountNear}/>
                                 : <button className="claim-drop" disabled={true}>
@@ -315,7 +315,7 @@ export default function App() {
                         let contact = {
                             amount: contactAmount,
                             contact: {
-                                contact_type: contactType,
+                                category: contactType,
                                 value: contactValue
                             }
                         }
@@ -481,7 +481,7 @@ export default function App() {
                                                     exportPayouts.push({
                                                         amount: githubRepoAmount,
                                                         contact: {
-                                                            contact_type: "Github",
+                                                            category: "Github",
                                                             value: item["login"]
                                                         }
                                                     });

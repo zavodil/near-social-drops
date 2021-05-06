@@ -47,7 +47,7 @@ type WrappedBalance = U128;
 
 #[derive(BorshSerialize, BorshDeserialize, Eq, PartialEq, Debug, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
-pub enum ContactTypes {
+pub enum ContactCategories {
     Email,
     Telegram,
     Twitter,
@@ -58,7 +58,7 @@ pub enum ContactTypes {
 #[derive(Clone, BorshDeserialize, BorshSerialize, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Contact {
-    pub contact_type: ContactTypes,
+    pub category: ContactCategories,
     pub value: String,
 }
 
@@ -222,7 +222,7 @@ impl NearDrop {
 
         if balance_to_claim > 0 {
             env::log(format!("Claiming {} by @{} [{:?} account {:?}] drop #{}",
-                             balance_to_claim, account_id, contact.contact_type, contact.value, drop_id).as_bytes());
+                             balance_to_claim, account_id, contact.category, contact.value, drop_id).as_bytes());
 
             PromiseOrValue::Promise(auth::is_owner(account_id.clone(), contact.clone(), &self.near_auth_contract, NO_DEPOSIT, BASE_GAS)
                 .then(ext_self::on_is_owner_on_claim(
@@ -253,7 +253,7 @@ impl NearDrop {
             PromiseOrValue::Value(false)
         } else {
             env::log(format!("Claimed {} by @{} [{:?} account {:?}] drop #{}",
-                             balance_to_claim, recipient_account_id, recipient_contact.contact_type, recipient_contact.value, drop_id).as_bytes());
+                             balance_to_claim, recipient_account_id, recipient_contact.category, recipient_contact.value, drop_id).as_bytes());
 
             PromiseOrValue::Promise(Promise::new(recipient_account_id.clone())
                 .transfer(balance_to_claim)
@@ -300,7 +300,7 @@ impl NearDrop {
 
                     if payout_found {
                         env::log(format!("@{} claimed {} [{:?} account {:?}] for drop #{}",
-                                         account_id, balance_to_claim, contact.contact_type, contact.value, drop_id).as_bytes());
+                                         account_id, balance_to_claim, contact.category, contact.value, drop_id).as_bytes());
 
                         let d = Drop {
                             owner_account_id: drop.owner_account_id,
