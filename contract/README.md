@@ -1,23 +1,4 @@
-export NODE_ENV=testnet
-export CONTRACT_ID="dev-1619454279568-5721575"
-
-near call $CONTRACT_ID new '{"near_auth_contract": "dev-1614425625888-4173456"}' --accountId zavodil.testnet
-
-near call $CONTRACT_ID add_drop '{ "payouts": [{"amount": "100000000", "contact": {"contact_type":"Telegram", "value":"kakoilogin"}}, {"amount": "200000000", "contact": {"contact_type":"Email", "value":"test_unknown@topcyprus.net"}}], "title": "1", "description": "2" }' --accountId testbeta.testnet --amount 1
-
-near view $CONTRACT_ID get_drop '{"id": 2}'
-
-near view $CONTRACT_ID get_drops '{"from_index":0, "limit":100}'
-
-near view $CONTRACT_ID get_drops_by_account_id '{"account_id" : "grant.testnet", "from_index":0, "limit":100}'
-get_drops_by_account_id
-
-near call $CONTRACT_ID claim '{"drop_id":0, "contact": {"contact_type":"Email", "value":"test_unknown@topcyprus.net"}}' --accountId nearup.testnet 
-
-near call $CONTRACT_ID claim '{"drop_id":0, "contact": {"contact_type":"Email", "value":"test_unknown@topcyprus.net"}}' --accountId zavodil.testnet
-
- pub fn add_drop(&mut self, payouts: Vec<PayoutInput>, title: String, description: String) -> u64 {
-        let tokens: Balance = near_sdk::env::attached_deposit();
+Live demo: https://testnet.drop.nearspace.info/
 
 drop Smart Contract
 ==================
